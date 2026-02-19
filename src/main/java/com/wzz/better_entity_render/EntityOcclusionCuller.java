@@ -58,10 +58,6 @@ public final class EntityOcclusionCuller {
 
     private EntityOcclusionCuller() {}
 
-    // -------------------------------------------------------------------------
-    // Native 声明
-    // -------------------------------------------------------------------------
-
     /**
      * 用 Amanatides & Woo 遍历 9 条射线，返回所有需要检查的去重方块位置。
      * 返回格式：int[] = [anyRayOpen(0/1), count, x0,y0,z0, x1,y1,z1, ...]
@@ -103,11 +99,9 @@ public final class EntityOcclusionCuller {
      * 旁观者模式下直接返回 true（相机能穿墙，遮挡无意义）。
      */
     public static boolean isVisible(Entity entity, Level level) {
-        // 旁观者模式跳过
         Minecraft mc = Minecraft.getInstance();
         if (mc.player != null && mc.player.isSpectator()) return true;
 
-        // 玩家实体跳过
         if (entity instanceof Player) return true;
 
         int  id   = entity.getId();

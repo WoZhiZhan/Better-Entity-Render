@@ -21,7 +21,7 @@ public class MixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-        return OSHelper.isWindows();
+        return !mixinClassName.contains("EntityRenderDispatcher") || OSHelper.isWindows();
     }
 
     @Override
