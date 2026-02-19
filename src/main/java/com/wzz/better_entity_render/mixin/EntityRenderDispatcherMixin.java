@@ -25,6 +25,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.Overwrite;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(EntityRenderDispatcher.class)
 public abstract class EntityRenderDispatcherMixin {
@@ -153,32 +154,29 @@ public abstract class EntityRenderDispatcherMixin {
         EntityOcclusionCuller.flushTasks();
     }
 
-    /**
-     * @reason
-     * 替换原版 distanceToSqr(double,double,double)：
-     * 直接用缓存坐标计算，省去 camera.getPosition() 每次产生的 Vec3 开销。
-     * 原版：return this.camera.getPosition().distanceToSqr(x, y, z);
-     * @author wzz
-     */
-    @Overwrite
-    public double distanceToSqr(double x, double y, double z) {
+    @Inject(
+            method = "distanceToSqr(DDD)D",
+            at = @At("HEAD"),
+            cancellable = true
+    )
+    private void onDistanceToSqr(double x, double y, double z,
+                                 CallbackInfoReturnable<Double> cir) {
         double dx = better_entity_render$cachedCamX - x;
         double dy = better_entity_render$cachedCamY - y;
         double dz = better_entity_render$cachedCamZ - z;
-        return dx * dx + dy * dy + dz * dz;
+        cir.setReturnValue(dx * dx + dy * dy + dz * dz);
     }
 
-    /**
-     * @reason
-     * 替换原版 distanceToSqr(Entity)：同上。
-     * 原版：return this.camera.getPosition().distanceToSqr(entity.position());
-     * @author wzz
-     */
-    @Overwrite
-    public double distanceToSqr(Entity entity) {
+    @Inject(
+            method = "distanceToSqr(Lnet/minecraft/world/entity/Entity;)D",
+            at = @At("HEAD"),
+            cancellable = true
+    )
+    private void onDistanceToSqr(Entity entity,
+                                 CallbackInfoReturnable<Double> cir) {
         double dx = better_entity_render$cachedCamX - entity.getX();
         double dy = better_entity_render$cachedCamY - entity.getY();
         double dz = better_entity_render$cachedCamZ - entity.getZ();
-        return dx * dx + dy * dy + dz * dz;
+        cir.setReturnValue(dx * dx + dy * dy + dz * dz);
     }
 }
