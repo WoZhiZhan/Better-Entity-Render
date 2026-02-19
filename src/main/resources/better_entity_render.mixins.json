@@ -1,0 +1,21 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.wzz.better_entity_render.mixin",
+  "compatibilityLevel": "JAVA_8",
+  "refmap": "better_entity_render.refmap.json",
+  "plugin": "com.wzz.better_entity_render.MixinPlugin",
+  "mixins": [
+    "EntityCollisionMixin",
+    "VoxelShapeMixin"
+  ],
+  "client": [
+    "EntityRenderDispatcherMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
+}
