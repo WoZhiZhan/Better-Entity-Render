@@ -11,9 +11,10 @@ import net.minecraft.world.phys.AABB;
 
 import java.util.Queue;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * 异步实体遮挡剔除 v3。
+ * 异步实体遮挡剔除 v4。
  *
  * 架构：
  *   1. 主线程 isVisible() 快速返回缓存值
@@ -22,11 +23,13 @@ import java.util.concurrent.*;
  *      b. 主线程（通过 CompletableFuture 回调）查询每个位置的 block state
  *      c. native evaluateVisibility() → 判断是否有射线通畅
  *   3. 迟滞策略防闪烁：可见→遮挡需 3 次连续确认，遮挡→可见 1 次即生效
+ *   4. 距离剔除：超过配置距离直接可见（不检测遮挡）
  *
  * 修复：
  *   - 旁观者模式直接跳过（相机能穿墙）
  *   - 换用 Amanatides & Woo 精确体素遍历，消除半砖等边界浮点误差
  *   - block state 查询放回主线程，避免并发访问 chunk 数据
+ *   - 使用 canOcclude() 替代 isCollisionShapeFullBlock()，修复头颅等方块误判
  */
 public final class EntityOcclusionCuller {
 
@@ -97,12 +100,22 @@ public final class EntityOcclusionCuller {
     /**
      * 主线程查询可见性。
      * 旁观者模式下直接返回 true（相机能穿墙，遮挡无意义）。
+     * 距离超过配置值时直接返回 true（不检测遮挡）。
      */
     public static boolean isVisible(Entity entity, Level level) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player != null && mc.player.isSpectator()) return true;
 
         if (entity instanceof Player) return true;
+
+        // ---- 距离剔除：超出配置距离直接可见 ----
+        double maxOcclusionDistance = Config.MAX_OCCLUSION_DISTANCE.get();
+        if (maxOcclusionDistance > 0) {
+            double distSq = entity.distanceToSqr(camX, camY, camZ);
+            if (distSq > maxOcclusionDistance * maxOcclusionDistance) {
+                return true;
+            }
+        }
 
         int  id   = entity.getId();
         AABB aabb = entity.getBoundingBox();
@@ -146,6 +159,7 @@ public final class EntityOcclusionCuller {
      * 2. 将新的 Phase1 任务提交给 worker
      */
     public static void flushTasks() {
+        if (WORKER.isShutdown() || WORKER.isTerminated()) return;
         // ---- Phase2：主线程执行 block state 查询 ----
         int p2Count = 0;
         Phase2Task p2;
@@ -215,7 +229,7 @@ public final class EntityOcclusionCuller {
 
     /** 主线程：查询 block state，调用 native 评估 */
     private static void processPhase2(Phase2Task task) {
-        int count      = task.positions.length / 3;
+        int count = task.positions.length / 3;
         boolean[] solid = new boolean[count];
 
         BlockPos.MutableBlockPos mpos = new BlockPos.MutableBlockPos();
@@ -226,7 +240,9 @@ public final class EntityOcclusionCuller {
             mpos.set(bx, by, bz);
             try {
                 BlockState bs = task.level.getChunk(mpos).getBlockState(mpos);
-                solid[i] = bs.isCollisionShapeFullBlock(task.level, mpos);
+                // 修复：使用 canOcclude() 替代 isCollisionShapeFullBlock()
+                // 头颅、玻璃、树叶等方块不会遮挡视线
+                solid[i] = bs.canOcclude();
             } catch (Exception e) {
                 solid[i] = false; // chunk 未加载，保守不遮挡
             }
